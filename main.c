@@ -17,12 +17,52 @@ typedef struct GraphState {
 	SDL_Renderer* renderer;
 } GraphState;
 
+
+bool RenderGraphAxis(GraphState* graphstate) {
+	SDL_Window* window = graphstate->window;
+	if (window == NULL) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to retrieve window");
+		return false;
+	}
+
+	SDL_Renderer* renderer = graphstate->renderer;
+	if (renderer == NULL) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to retrieve renderer");
+		return false;
+	}
+
+	int width, height;
+	if (!SDL_GetWindowSizeInPixels(window, &width, &height)) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to retrieve window dimensions");
+		return false;
+	}
+
+	Point origin = graphstate->origin;
+
+	if (origin.x >= 0 && origin.x < width) {
+		SDL_SetRenderDrawColorFloat(renderer, 0.0, 0.0, 0.0, 1.0);
+
+		SDL_RenderLine(renderer, origin.x, 0.0, origin.x, height);
+	}
+
+	if (origin.y >= 0 && origin.y < height) {
+		SDL_SetRenderDrawColorFloat(renderer, 0.0, 0.0, 0.0, 1.0);
+
+		SDL_RenderLine(renderer, 0.0, origin.y, width, origin.y);
+	}
+
+	return true;
+}
+
+
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 	GraphState* graphstate = SDL_malloc(sizeof(GraphState));
 	if (graphstate == NULL) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to allocate GraphState");
 		return SDL_APP_FAILURE;
 	}
+
+	graphstate->origin = (Point){ .x = WIDTH / 2.0, .y = HEIGHT / 2.0 };
 
 	bool success = SDL_CreateWindowAndRenderer(
 		TITLE, WIDTH, HEIGHT, 
@@ -60,6 +100,12 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 	SDL_SetRenderDrawColorFloat(renderer, 1.0, 1.0, 1.0, 1.0);
 
 	SDL_RenderClear(renderer);
+
+	// DRAW
+	if (!RenderGraphAxis(graphstate)) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to render graph axis");
+		return SDL_APP_FAILURE;
+	}
 
 	SDL_RenderPresent(renderer);
 
