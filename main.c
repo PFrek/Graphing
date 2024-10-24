@@ -2,57 +2,14 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL.h>
 
+#include "graph.h"
+#include "error.h"
+
 #define TITLE "Graphing"
 #define WIDTH 800
 #define HEIGHT 600
 
-typedef struct Point {
-	float x;
-	float y;
-} Point;
 
-typedef struct GraphState {
-	Point origin;
-	SDL_Window* window;
-	SDL_Renderer* renderer;
-} GraphState;
-
-
-bool RenderGraphAxis(GraphState* graphstate) {
-	SDL_Window* window = graphstate->window;
-	if (window == NULL) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to retrieve window");
-		return false;
-	}
-
-	SDL_Renderer* renderer = graphstate->renderer;
-	if (renderer == NULL) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to retrieve renderer");
-		return false;
-	}
-
-	int width, height;
-	if (!SDL_GetWindowSizeInPixels(window, &width, &height)) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to retrieve window dimensions");
-		return false;
-	}
-
-	Point origin = graphstate->origin;
-
-	if (origin.x >= 0 && origin.x < width) {
-		SDL_SetRenderDrawColorFloat(renderer, 0.0, 0.0, 0.0, 1.0);
-
-		SDL_RenderLine(renderer, origin.x, 0.0, origin.x, height);
-	}
-
-	if (origin.y >= 0 && origin.y < height) {
-		SDL_SetRenderDrawColorFloat(renderer, 0.0, 0.0, 0.0, 1.0);
-
-		SDL_RenderLine(renderer, 0.0, origin.y, width, origin.y);
-	}
-
-	return true;
-}
 
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
@@ -63,6 +20,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 	}
 
 	graphstate->origin = (Point){ .x = WIDTH / 2.0, .y = HEIGHT / 2.0 };
+	graphstate->scrollSpeed = 5.0;
 
 	bool success = SDL_CreateWindowAndRenderer(
 		TITLE, WIDTH, HEIGHT, 
@@ -84,7 +42,9 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 SDL_AppResult SDL_AppIterate(void* appstate) {
 	GraphState* graphstate = (GraphState*)appstate;
 	if (graphstate == NULL) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to retrieve GraphState");
+		globalErrorCode = ERROR_GRAPHSTATE_NULL;
+		Error_LogLastError();
+
 		return SDL_APP_FAILURE;
 	}
 
@@ -93,7 +53,9 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 	// RENDER
 	SDL_Renderer* renderer = graphstate->renderer;
 	if (renderer == NULL) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "GraphState's SDL_Renderer not found");
+		globalErrorCode = ERROR_RENDERER_NULL;
+		Error_LogLastError();
+
 		return SDL_APP_FAILURE;
 	}
 
@@ -102,8 +64,10 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 	SDL_RenderClear(renderer);
 
 	// DRAW
-	if (!RenderGraphAxis(graphstate)) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to render graph axis");
+	if (Graph_RenderAxis(graphstate) != SUCCESS) {
+		Error_LogLastError();
+
+		Error_LogError(ERROR_FATAL);
 		return SDL_APP_FAILURE;
 	}
 
@@ -115,19 +79,45 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 	GraphState* graphstate = (GraphState*)appstate;
 	if (graphstate == NULL) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to retrieve GraphState");
+		globalErrorCode = ERROR_GRAPHSTATE_NULL;
+		Error_LogLastError();
+
 		return SDL_APP_FAILURE;
 	}
-
-	if (event->type == SDL_EVENT_QUIT) {
+	else if (event->type == SDL_EVENT_QUIT) {
 		return SDL_APP_SUCCESS;
 	}
-
-	if (event->type == SDL_EVENT_KEY_DOWN) {
+	else if (event->type == SDL_EVENT_WINDOW_RESIZED) {
+		if (Graph_CenterOrigin(graphstate) != SUCCESS) {
+			Error_LogLastError();
+		}
+	}
+	else if (event->type == SDL_EVENT_KEY_DOWN) {
 		switch (event->key.key) {
 		case SDLK_ESCAPE:
 			return SDL_APP_SUCCESS;
 			break;
+
+		case SDLK_UP:
+			graphstate->origin.y += graphstate->scrollSpeed;
+			break;
+
+		case SDLK_DOWN:
+			graphstate->origin.y -= graphstate->scrollSpeed;
+			break;
+
+		case SDLK_LEFT:
+			graphstate->origin.x += graphstate->scrollSpeed;
+			break;
+
+		case SDLK_RIGHT:
+			graphstate->origin.x -= graphstate->scrollSpeed;
+			break;
+
+		case SDLK_R:
+			if (Graph_CenterOrigin(graphstate) != SUCCESS) {
+				Error_LogLastError();
+			}
 		}
 	}
 
